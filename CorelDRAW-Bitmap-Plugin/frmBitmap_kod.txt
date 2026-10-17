@@ -1,0 +1,346 @@
+Option Explicit
+
+' =====================================================================
+'  BITMAP KONVERTER - oyna kodi (UserForm: frmBitmap)
+'  Barcha tugmalar va maydonlar shu kod orqali avtomatik yaratiladi,
+'  shuning uchun bo'sh UserForm yaratib, shu kodni joylash kifoya.
+' =====================================================================
+
+' ----- Ranglar: to'q kulrang fon, oq matn -----
+Private Const CLR_BG As Long = &H2D2D2D
+Private Const CLR_PANEL As Long = &H383838
+Private Const CLR_INPUT As Long = &H1E1E1E
+Private Const CLR_BTN As Long = &H555555
+Private Const CLR_RUN As Long = &H6E6E6E
+Private Const CLR_TEXT As Long = &HFFFFFF
+Private Const CLR_MUTED As Long = &HC0C0C0
+
+Private WithEvents btnRun As MSForms.CommandButton
+Private WithEvents btnClose As MSForms.CommandButton
+Private WithEvents btnReset As MSForms.CommandButton
+Private WithEvents scrBright As MSForms.ScrollBar
+Private WithEvents txtBright As MSForms.TextBox
+
+Private optSel As MSForms.OptionButton
+Private optPage As MSForms.OptionButton
+Private optAll As MSForms.OptionButton
+Private optEach As MSForms.OptionButton
+Private optOne As MSForms.OptionButton
+Private optRGB As MSForms.OptionButton
+Private optCMYK As MSForms.OptionButton
+Private optGray As MSForms.OptionButton
+Private cboRes As MSForms.ComboBox
+Private chkOnlyBmp As MSForms.CheckBox
+Private chkAA As MSForms.CheckBox
+Private chkTransp As MSForms.CheckBox
+Private lblStatus As MSForms.Label
+
+Private mUpdating As Boolean
+
+' =====================================================================
+'  OYNANI QURISH
+' =====================================================================
+Private Sub UserForm_Initialize()
+    Dim fr As MSForms.Frame, lbl As MSForms.Label
+
+    Me.Caption = "Bitmap konverter"
+    Me.BackColor = CLR_BG
+    Me.ForeColor = CLR_TEXT
+    Me.Width = 292
+    Me.Height = 462
+
+    Set lbl = NewCtl(Me, "Forms.Label.1", "BITMAP KONVERTER", 10, 8, 270, 18, CLR_BG)
+    lbl.Font.Size = 12
+    lbl.Font.Bold = True
+    Set lbl = NewCtl(Me, "Forms.Label.1", "Rasmlarni bitmapga aylantirish", 10, 24, 270, 14, CLR_BG)
+    lbl.ForeColor = CLR_MUTED
+
+    ' ----- Qamrov -----
+    Set fr = NewFrame("Qamrov", 42, 70)
+    Set optSel = NewCtl(fr, "Forms.OptionButton.1", "Faqat tanlangan obyektlar", 8, 4, 250, 16, CLR_PANEL)
+    Set optPage = NewCtl(fr, "Forms.OptionButton.1", "Joriy list (hammasi)", 8, 22, 250, 16, CLR_PANEL)
+    Set optAll = NewCtl(fr, "Forms.OptionButton.1", "Barcha listlar (hammasi)", 8, 40, 250, 16, CLR_PANEL)
+    optPage.Value = True
+
+    ' ----- Usul -----
+    Set fr = NewFrame("Usul", 118, 52)
+    Set optEach = NewCtl(fr, "Forms.OptionButton.1", "Har birini alohida bitmap qilish", 8, 4, 250, 16, CLR_PANEL)
+    Set optOne = NewCtl(fr, "Forms.OptionButton.1", "Listdagi hammasini bitta bitmap qilish", 8, 22, 250, 16, CLR_PANEL)
+    optEach.Value = True
+
+    ' ----- Rang rejimi -----
+    Set fr = NewFrame("Rang rejimi", 176, 36)
+    Set optRGB = NewCtl(fr, "Forms.OptionButton.1", "RGB", 8, 4, 60, 16, CLR_PANEL)
+    Set optCMYK = NewCtl(fr, "Forms.OptionButton.1", "CMYK", 80, 4, 60, 16, CLR_PANEL)
+    Set optGray = NewCtl(fr, "Forms.OptionButton.1", "Grayscale", 155, 4, 90, 16, CLR_PANEL)
+    optCMYK.Value = True
+
+    ' ----- Razreshenie -----
+    NewCtl Me, "Forms.Label.1", "Razreshenie (DPI):", 12, 224, 120, 16, CLR_BG
+    Set cboRes = NewCtl(Me, "Forms.ComboBox.1", "", 150, 221, 130, 18, CLR_INPUT)
+    cboRes.AddItem "72"
+    cboRes.AddItem "150"
+    cboRes.AddItem "200"
+    cboRes.AddItem "300"
+    cboRes.AddItem "600"
+    cboRes.AddItem "1200"
+    cboRes.Text = "300"
+
+    ' ----- Yorqinlik -----
+    Set fr = NewFrame("Yorqinlik (ochroq / to'qroq)", 246, 56)
+    Set scrBright = NewCtl(fr, "Forms.ScrollBar.1", "", 8, 6, 182, 16, CLR_PANEL)
+    scrBright.Orientation = fmOrientationHorizontal
+    scrBright.Min = -100
+    scrBright.Max = 100
+    scrBright.SmallChange = 1
+    scrBright.LargeChange = 10
+    scrBright.Value = 0
+    Set txtBright = NewCtl(fr, "Forms.TextBox.1", "", 196, 5, 38, 18, CLR_INPUT)
+    txtBright.Text = "0"
+    txtBright.TextAlign = fmTextAlignCenter
+    Set btnReset = NewCtl(fr, "Forms.CommandButton.1", "0", 238, 5, 22, 18, CLR_BTN)
+    Set lbl = NewCtl(fr, "Forms.Label.1", "< To'qroq", 8, 24, 80, 12, CLR_PANEL)
+    lbl.ForeColor = CLR_MUTED
+    Set lbl = NewCtl(fr, "Forms.Label.1", "Ochroq >", 110, 24, 80, 12, CLR_PANEL)
+    lbl.ForeColor = CLR_MUTED
+    lbl.TextAlign = fmTextAlignRight
+
+    ' ----- Qo'shimcha -----
+    Set chkOnlyBmp = NewCtl(Me, "Forms.CheckBox.1", "Faqat rasmlar (bitmap) ni o'zgartirish", 12, 310, 268, 16, CLR_BG)
+    Set chkAA = NewCtl(Me, "Forms.CheckBox.1", "Anti-aliasing (silliq chetlar)", 12, 328, 268, 16, CLR_BG)
+    Set chkTransp = NewCtl(Me, "Forms.CheckBox.1", "Shaffof fon", 12, 346, 268, 16, CLR_BG)
+    chkOnlyBmp.Value = False
+    chkAA.Value = True
+    chkTransp.Value = True
+
+    ' ----- Holat -----
+    Set lblStatus = NewCtl(Me, "Forms.Label.1", "Tayyor.", 12, 368, 268, 26, CLR_BG)
+    lblStatus.ForeColor = CLR_MUTED
+    lblStatus.WordWrap = True
+
+    ' ----- Tugmalar -----
+    Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 398, 170, 28, CLR_RUN)
+    btnRun.Font.Bold = True
+    Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 398, 92, 28, CLR_BTN)
+End Sub
+
+Private Function NewFrame(cap As String, t As Single, h As Single) As MSForms.Frame
+    Dim fr As MSForms.Frame
+    Set fr = NewCtl(Me, "Forms.Frame.1", cap, 8, t, 272, h, CLR_PANEL)
+    fr.SpecialEffect = fmSpecialEffectFlat
+    fr.BorderStyle = fmBorderStyleSingle
+    fr.BorderColor = CLR_BTN
+    Set NewFrame = fr
+End Function
+
+Private Function NewCtl(parent As Object, progId As String, cap As String, _
+                        l As Single, t As Single, w As Single, h As Single, _
+                        bg As Long) As Object
+    Dim c As Object
+    Set c = parent.Controls.Add(progId)
+    c.Left = l
+    c.Top = t
+    c.Width = w
+    c.Height = h
+    On Error Resume Next   ' hamma elementda ham barcha xossalar yo'q
+    If cap <> "" Then c.Caption = cap
+    c.Font.Name = "Segoe UI"
+    c.Font.Size = 9
+    c.ForeColor = CLR_TEXT
+    c.BackColor = bg
+    c.BackStyle = fmBackStyleOpaque
+    On Error GoTo 0
+    Set NewCtl = c
+End Function
+
+' =====================================================================
+'  YORQINLIK BOSHQARUVI
+' =====================================================================
+Private Sub scrBright_Change()
+    SyncBrightText
+End Sub
+
+Private Sub scrBright_Scroll()
+    SyncBrightText
+End Sub
+
+Private Sub SyncBrightText()
+    If mUpdating Then Exit Sub
+    mUpdating = True
+    txtBright.Text = CStr(scrBright.Value)
+    mUpdating = False
+End Sub
+
+Private Sub txtBright_Change()
+    Dim v As Long
+    If mUpdating Then Exit Sub
+    If Not IsNumeric(txtBright.Text) Then Exit Sub
+    v = CLng(Val(txtBright.Text))
+    If v < -100 Then v = -100
+    If v > 100 Then v = 100
+    mUpdating = True
+    scrBright.Value = v
+    mUpdating = False
+End Sub
+
+Private Sub btnReset_Click()
+    scrBright.Value = 0
+End Sub
+
+Private Sub btnClose_Click()
+    Unload Me
+End Sub
+
+' =====================================================================
+'  ASOSIY ISH
+' =====================================================================
+Private Sub btnRun_Click()
+    Dim res As Long, mode As cdrImageType, bright As Long
+    Dim pg As Page, sr As ShapeRange
+    Dim okCount As Long, errCount As Long
+
+    If ActiveDocument Is Nothing Then
+        MsgBox "Ochiq hujjat yo'q.", vbExclamation, Me.Caption
+        Exit Sub
+    End If
+
+    If Not IsNumeric(cboRes.Text) Then
+        MsgBox "Razreshenie (DPI) raqam bo'lishi kerak.", vbExclamation, Me.Caption
+        Exit Sub
+    End If
+    res = CLng(Val(cboRes.Text))
+    If res < 30 Or res > 3000 Then
+        MsgBox "Razreshenie 30 dan 3000 gacha bo'lishi kerak.", vbExclamation, Me.Caption
+        Exit Sub
+    End If
+
+    If optRGB.Value Then
+        mode = cdrRGBColorImage
+    ElseIf optCMYK.Value Then
+        mode = cdrCMYKColorImage
+    Else
+        mode = cdrGrayscaleImage
+    End If
+    bright = scrBright.Value
+
+    If optSel.Value And ActiveSelectionRange.Count = 0 Then
+        MsgBox "Hech narsa tanlanmagan.", vbExclamation, Me.Caption
+        Exit Sub
+    End If
+
+    btnRun.Enabled = False
+    ActiveDocument.BeginCommandGroup "Bitmap konverter"
+    Optimization = True
+    On Error GoTo Finish
+
+    If optSel.Value Then
+        Set sr = FilterRange(ActiveSelectionRange)
+        ProcessRange sr, mode, res, bright, okCount, errCount
+    ElseIf optPage.Value Then
+        Set sr = CollectPage(ActivePage)
+        ProcessRange sr, mode, res, bright, okCount, errCount
+    Else
+        For Each pg In ActiveDocument.Pages
+            pg.Activate
+            SetStatus "List " & pg.Index & " / " & ActiveDocument.Pages.Count & " ..."
+            Set sr = CollectPage(pg)
+            ProcessRange sr, mode, res, bright, okCount, errCount
+        Next pg
+    End If
+
+Finish:
+    If Err.Number <> 0 Then errCount = errCount + 1
+    On Error GoTo 0
+    Optimization = False
+    ActiveDocument.EndCommandGroup
+    ActiveWindow.Refresh
+    Application.Refresh
+    btnRun.Enabled = True
+
+    SetStatus "Tayyor: " & okCount & " ta bitmap qilindi" & _
+              IIf(errCount > 0, ", " & errCount & " ta xato.", ".")
+    MsgBox okCount & " ta obyekt bitmapga aylantirildi." & _
+           IIf(errCount > 0, vbCrLf & errCount & " ta obyektda xato bo'ldi.", ""), _
+           vbInformation, Me.Caption
+End Sub
+
+' Listdagi barcha mos obyektlarni yig'ish (yashirin/qulflangan qatlamlar o'tkazib yuboriladi)
+Private Function CollectPage(pg As Page) As ShapeRange
+    Dim sr As ShapeRange, lyr As Layer, s As Shape
+    Set sr = CreateShapeRange
+    For Each lyr In pg.Layers
+        If Not lyr.IsSpecialLayer And lyr.Visible And lyr.Editable Then
+            For Each s In lyr.Shapes
+                If IsEligible(s) Then sr.Add s
+            Next s
+        End If
+    Next lyr
+    Set CollectPage = sr
+End Function
+
+Private Function FilterRange(src As ShapeRange) As ShapeRange
+    Dim sr As ShapeRange, s As Shape
+    Set sr = CreateShapeRange
+    For Each s In src
+        If IsEligible(s) Then sr.Add s
+    Next s
+    Set FilterRange = sr
+End Function
+
+Private Function IsEligible(s As Shape) As Boolean
+    If s.Type = cdrGuidelineShape Then Exit Function
+    If s.Locked Then Exit Function
+    If chkOnlyBmp.Value Then
+        IsEligible = (s.Type = cdrBitmapShape)
+    Else
+        IsEligible = True
+    End If
+End Function
+
+Private Sub ProcessRange(sr As ShapeRange, mode As cdrImageType, res As Long, bright As Long, _
+                         okCount As Long, errCount As Long)
+    Dim i As Long
+    If sr.Count = 0 Then Exit Sub
+
+    If optOne.Value And sr.Count > 1 Then
+        If ConvertShape(sr.Group, mode, res, bright) Then okCount = okCount + 1 Else errCount = errCount + 1
+    Else
+        For i = 1 To sr.Count
+            SetStatus "Ishlanmoqda: " & i & " / " & sr.Count
+            If ConvertShape(sr(i), mode, res, bright) Then okCount = okCount + 1 Else errCount = errCount + 1
+        Next i
+    End If
+End Sub
+
+' Bitta obyektni bitmapga aylantirish.
+' Yorqinlik "Brighten" linzasi orqali beriladi: +100 ochroq, -100 to'qroq.
+Private Function ConvertShape(s As Shape, mode As cdrImageType, res As Long, bright As Long) As Boolean
+    Dim target As Shape, r As Shape, grp As ShapeRange
+    Dim aa As cdrAntiAliasingType
+    On Error GoTo Fail
+
+    Set target = s
+    If bright <> 0 Then
+        Set r = s.Layer.CreateRectangle2(s.LeftX, s.BottomY, s.SizeWidth, s.SizeHeight)
+        r.Outline.SetNoOutline
+        r.CreateLens cdrLensBrighten, bright
+        r.OrderFrontOf s
+        Set grp = CreateShapeRange
+        grp.Add s
+        grp.Add r
+        Set target = grp.Group
+    End If
+
+    If chkAA.Value Then aa = cdrNormalAntiAliasing Else aa = cdrNoAntiAliasing
+    target.ConvertToBitmapEx mode, False, CBool(chkTransp.Value), res, aa, True, False, 95
+    ConvertShape = True
+    Exit Function
+
+Fail:
+    ConvertShape = False
+End Function
+
+Private Sub SetStatus(msg As String)
+    lblStatus.Caption = msg
+    DoEvents
+End Sub
