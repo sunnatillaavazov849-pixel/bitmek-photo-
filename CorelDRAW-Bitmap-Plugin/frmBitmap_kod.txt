@@ -30,6 +30,7 @@ Private optRGB As MSForms.OptionButton
 Private optCMYK As MSForms.OptionButton
 Private optGray As MSForms.OptionButton
 Private cboRes As MSForms.ComboBox
+Private chkGroupOne As MSForms.CheckBox
 Private chkDeep As MSForms.CheckBox
 Private chkOnlyBmp As MSForms.CheckBox
 Private chkAA As MSForms.CheckBox
@@ -50,7 +51,7 @@ Private Sub UserForm_Initialize()
     Me.BackColor = CLR_BG
     Me.ForeColor = CLR_TEXT
     Me.Width = 292
-    Me.Height = 480
+    Me.Height = 498
 
     Set lbl = NewCtl(Me, "Forms.Label.1", "BITMAP KONVERTER", 10, 8, 270, 18, CLR_BG)
     lbl.Font.Size = 12
@@ -109,24 +110,26 @@ Private Sub UserForm_Initialize()
     lbl.TextAlign = fmTextAlignRight
 
     ' ----- Qo'shimcha -----
-    Set chkDeep = NewCtl(Me, "Forms.CheckBox.1", "Guruh va PowerClip ichidagilarni ham alohida", 12, 310, 268, 16, CLR_BG)
-    Set chkOnlyBmp = NewCtl(Me, "Forms.CheckBox.1", "Faqat rasmlar (bitmap) ni o'zgartirish", 12, 328, 268, 16, CLR_BG)
-    Set chkAA = NewCtl(Me, "Forms.CheckBox.1", "Anti-aliasing (silliq chetlar)", 12, 346, 268, 16, CLR_BG)
-    Set chkTransp = NewCtl(Me, "Forms.CheckBox.1", "Shaffof fon", 12, 364, 268, 16, CLR_BG)
+    Set chkGroupOne = NewCtl(Me, "Forms.CheckBox.1", "Guruhni butunligicha bitta rasm qilish", 12, 310, 268, 16, CLR_BG)
+    Set chkDeep = NewCtl(Me, "Forms.CheckBox.1", "PowerClip ichidagilarni ham bitmap qilish", 12, 328, 268, 16, CLR_BG)
+    Set chkOnlyBmp = NewCtl(Me, "Forms.CheckBox.1", "Faqat rasmlar (bitmap) ni o'zgartirish", 12, 346, 268, 16, CLR_BG)
+    Set chkAA = NewCtl(Me, "Forms.CheckBox.1", "Anti-aliasing (silliq chetlar)", 12, 364, 268, 16, CLR_BG)
+    Set chkTransp = NewCtl(Me, "Forms.CheckBox.1", "Shaffof fon", 12, 382, 268, 16, CLR_BG)
+    chkGroupOne.Value = True
     chkDeep.Value = True
     chkOnlyBmp.Value = False
     chkAA.Value = True
     chkTransp.Value = True
 
     ' ----- Holat -----
-    Set lblStatus = NewCtl(Me, "Forms.Label.1", "Tayyor.", 12, 386, 268, 26, CLR_BG)
+    Set lblStatus = NewCtl(Me, "Forms.Label.1", "Tayyor.", 12, 404, 268, 26, CLR_BG)
     lblStatus.ForeColor = CLR_MUTED
     lblStatus.WordWrap = True
 
     ' ----- Tugmalar -----
-    Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 416, 170, 28, CLR_RUN)
+    Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 434, 170, 28, CLR_RUN)
     btnRun.Font.Bold = True
-    Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 416, 92, 28, CLR_BTN)
+    Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 434, 92, 28, CLR_BTN)
 
     mUpdating = False
 End Sub
@@ -319,10 +322,12 @@ Private Sub ProcessRange(sr As ShapeRange, mode As cdrImageType, res As Long, br
     End If
 End Sub
 
-' Obyektni ishlash. "Guruh va PowerClip ichidagilarni ham" yoqilgan bo'lsa:
-'  - PowerClip: ichidagilar chiqariladi, har biri alohida bitmap qilinadi va joyiga qaytariladi
-'    (konteyner ramkasi o'zgarmaydi);
-'  - Guruh: ochiladi, har bir bo'lagi alohida bitmap qilinadi va yana guruhlanadi.
+' Obyektni ishlash:
+'  - Guruh: "Guruhni butunligicha bitta rasm qilish" yoqilgan bo'lsa - butun guruh (ichidagi
+'    rasm, vektor, PowerClip bilan) bitta bitmap bo'ladi; o'chirilgan bo'lsa - guruh ochiladi,
+'    har bir bo'lagi alohida bitmap qilinadi va yana guruhlanadi.
+'  - PowerClip ("PowerClip ichidagilarni ham" yoqilgan bo'lsa): ichidagilar chiqariladi,
+'    ishlanadi va joyiga qaytariladi (konteyner ramkasi o'zgarmaydi).
 ' Natija sifatida hosil bo'lgan obyekt(lar) qaytariladi.
 Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bright As Long, _
                               okCount As Long, errCount As Long) As ShapeRange
@@ -350,8 +355,10 @@ Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bri
             out.Add s
             Exit Function
         End If
+    End If
 
-        ' ----- Guruh ichidagilar -----
+    ' ----- Guruhni bo'laklab ishlash (bitta rasm qilish o'chirilgan bo'lsa) -----
+    If Not chkGroupOne.Value Then
         If s.Type = cdrGroupShape Then
             nm = s.Name
             Set kids = s.UngroupEx
@@ -371,8 +378,9 @@ Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bri
     End If
 
     ' ----- Oddiy obyekt (rasm, vektor, matn ...) -----
+    ' (Guruh shu yerga kelsa - butunligicha bitta bitmap bo'ladi)
     If s.Locked Or s.Type = cdrGuidelineShape Or _
-       (chkOnlyBmp.Value And s.Type <> cdrBitmapShape) Then
+       (chkOnlyBmp.Value And s.Type <> cdrBitmapShape And s.Type <> cdrGroupShape) Then
         out.Add s
         Exit Function
     End If
