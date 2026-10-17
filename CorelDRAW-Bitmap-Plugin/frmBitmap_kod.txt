@@ -44,6 +44,8 @@ Private mUpdating As Boolean
 Private Sub UserForm_Initialize()
     Dim fr As MSForms.Frame, lbl As MSForms.Label
 
+    mUpdating = True   ' qurish paytida hodisalar (Change) ishlamasin
+
     Me.Caption = "Bitmap konverter"
     Me.BackColor = CLR_BG
     Me.ForeColor = CLR_TEXT
@@ -125,6 +127,8 @@ Private Sub UserForm_Initialize()
     Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 416, 170, 28, CLR_RUN)
     btnRun.Font.Bold = True
     Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 416, 92, 28, CLR_BTN)
+
+    mUpdating = False
 End Sub
 
 Private Function NewFrame(cap As String, t As Single, h As Single) As MSForms.Frame
@@ -168,7 +172,7 @@ Private Sub scrBright_Scroll()
 End Sub
 
 Private Sub SyncBrightText()
-    If mUpdating Then Exit Sub
+    If mUpdating Or txtBright Is Nothing Then Exit Sub
     mUpdating = True
     txtBright.Text = CStr(scrBright.Value)
     mUpdating = False
@@ -176,7 +180,7 @@ End Sub
 
 Private Sub txtBright_Change()
     Dim v As Long
-    If mUpdating Then Exit Sub
+    If mUpdating Or scrBright Is Nothing Then Exit Sub
     If Not IsNumeric(txtBright.Text) Then Exit Sub
     v = CLng(Val(txtBright.Text))
     If v < -100 Then v = -100
