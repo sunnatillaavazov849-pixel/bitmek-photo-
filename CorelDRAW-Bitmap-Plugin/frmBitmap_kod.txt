@@ -30,6 +30,7 @@ Private optRGB As MSForms.OptionButton
 Private optCMYK As MSForms.OptionButton
 Private optGray As MSForms.OptionButton
 Private cboRes As MSForms.ComboBox
+Private chkDeep As MSForms.CheckBox
 Private chkOnlyBmp As MSForms.CheckBox
 Private chkAA As MSForms.CheckBox
 Private chkTransp As MSForms.CheckBox
@@ -47,7 +48,7 @@ Private Sub UserForm_Initialize()
     Me.BackColor = CLR_BG
     Me.ForeColor = CLR_TEXT
     Me.Width = 292
-    Me.Height = 462
+    Me.Height = 480
 
     Set lbl = NewCtl(Me, "Forms.Label.1", "BITMAP KONVERTER", 10, 8, 270, 18, CLR_BG)
     lbl.Font.Size = 12
@@ -106,22 +107,24 @@ Private Sub UserForm_Initialize()
     lbl.TextAlign = fmTextAlignRight
 
     ' ----- Qo'shimcha -----
-    Set chkOnlyBmp = NewCtl(Me, "Forms.CheckBox.1", "Faqat rasmlar (bitmap) ni o'zgartirish", 12, 310, 268, 16, CLR_BG)
-    Set chkAA = NewCtl(Me, "Forms.CheckBox.1", "Anti-aliasing (silliq chetlar)", 12, 328, 268, 16, CLR_BG)
-    Set chkTransp = NewCtl(Me, "Forms.CheckBox.1", "Shaffof fon", 12, 346, 268, 16, CLR_BG)
+    Set chkDeep = NewCtl(Me, "Forms.CheckBox.1", "Guruh va PowerClip ichidagilarni ham alohida", 12, 310, 268, 16, CLR_BG)
+    Set chkOnlyBmp = NewCtl(Me, "Forms.CheckBox.1", "Faqat rasmlar (bitmap) ni o'zgartirish", 12, 328, 268, 16, CLR_BG)
+    Set chkAA = NewCtl(Me, "Forms.CheckBox.1", "Anti-aliasing (silliq chetlar)", 12, 346, 268, 16, CLR_BG)
+    Set chkTransp = NewCtl(Me, "Forms.CheckBox.1", "Shaffof fon", 12, 364, 268, 16, CLR_BG)
+    chkDeep.Value = True
     chkOnlyBmp.Value = False
     chkAA.Value = True
     chkTransp.Value = True
 
     ' ----- Holat -----
-    Set lblStatus = NewCtl(Me, "Forms.Label.1", "Tayyor.", 12, 368, 268, 26, CLR_BG)
+    Set lblStatus = NewCtl(Me, "Forms.Label.1", "Tayyor.", 12, 386, 268, 26, CLR_BG)
     lblStatus.ForeColor = CLR_MUTED
     lblStatus.WordWrap = True
 
     ' ----- Tugmalar -----
-    Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 398, 170, 28, CLR_RUN)
+    Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 416, 170, 28, CLR_RUN)
     btnRun.Font.Bold = True
-    Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 398, 92, 28, CLR_BTN)
+    Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 416, 92, 28, CLR_BTN)
 End Sub
 
 Private Function NewFrame(cap As String, t As Single, h As Single) As MSForms.Frame
@@ -290,11 +293,7 @@ End Function
 Private Function IsEligible(s As Shape) As Boolean
     If s.Type = cdrGuidelineShape Then Exit Function
     If s.Locked Then Exit Function
-    If chkOnlyBmp.Value Then
-        IsEligible = (s.Type = cdrBitmapShape)
-    Else
-        IsEligible = True
-    End If
+    IsEligible = True
 End Function
 
 Private Sub ProcessRange(sr As ShapeRange, mode As cdrImageType, res As Long, bright As Long, _
@@ -302,19 +301,97 @@ Private Sub ProcessRange(sr As ShapeRange, mode As cdrImageType, res As Long, br
     Dim i As Long
     If sr.Count = 0 Then Exit Sub
 
-    If optOne.Value And sr.Count > 1 Then
-        If ConvertShape(sr.Group, mode, res, bright) Then okCount = okCount + 1 Else errCount = errCount + 1
+    If optOne.Value Then
+        If sr.Count > 1 Then
+            If ConvertShape(sr.Group, mode, res, bright) Is Nothing Then errCount = errCount + 1 Else okCount = okCount + 1
+        Else
+            If ConvertShape(sr(1), mode, res, bright) Is Nothing Then errCount = errCount + 1 Else okCount = okCount + 1
+        End If
     Else
         For i = 1 To sr.Count
             SetStatus "Ishlanmoqda: " & i & " / " & sr.Count
-            If ConvertShape(sr(i), mode, res, bright) Then okCount = okCount + 1 Else errCount = errCount + 1
+            ProcessShape sr(i), mode, res, bright, okCount, errCount
         Next i
     End If
 End Sub
 
+' Obyektni ishlash. "Guruh va PowerClip ichidagilarni ham" yoqilgan bo'lsa:
+'  - PowerClip: ichidagilar chiqariladi, har biri alohida bitmap qilinadi va joyiga qaytariladi
+'    (konteyner ramkasi o'zgarmaydi);
+'  - Guruh: ochiladi, har bir bo'lagi alohida bitmap qilinadi va yana guruhlanadi.
+' Natija sifatida hosil bo'lgan obyekt(lar) qaytariladi.
+Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bright As Long, _
+                              okCount As Long, errCount As Long) As ShapeRange
+    Dim out As ShapeRange, kids As ShapeRange, inner As ShapeRange
+    Dim pc As PowerClip, b As Shape, nm As String, i As Long
+
+    Set out = CreateShapeRange
+    Set ProcessShape = out
+    On Error GoTo Fail
+
+    If chkDeep.Value Then
+        ' ----- PowerClip ichidagilar -----
+        On Error Resume Next
+        Set pc = s.PowerClip
+        On Error GoTo Fail
+        If Not pc Is Nothing Then
+            If pc.Shapes.Count > 0 Then
+                Set kids = pc.ExtractShapes
+                Set inner = CreateShapeRange
+                For i = 1 To kids.Count
+                    inner.AddRange ProcessShape(kids(i), mode, res, bright, okCount, errCount)
+                Next i
+                If inner.Count > 0 Then inner.AddToPowerClip s, cdrFalse
+            End If
+            out.Add s
+            Exit Function
+        End If
+
+        ' ----- Guruh ichidagilar -----
+        If s.Type = cdrGroupShape Then
+            nm = s.Name
+            Set kids = s.UngroupEx
+            Set inner = CreateShapeRange
+            For i = 1 To kids.Count
+                inner.AddRange ProcessShape(kids(i), mode, res, bright, okCount, errCount)
+            Next i
+            If inner.Count > 1 Then
+                Set b = inner.Group
+                If nm <> "" Then b.Name = nm
+                out.Add b
+            Else
+                out.AddRange inner
+            End If
+            Exit Function
+        End If
+    End If
+
+    ' ----- Oddiy obyekt (rasm, vektor, matn ...) -----
+    If s.Locked Or s.Type = cdrGuidelineShape Or _
+       (chkOnlyBmp.Value And s.Type <> cdrBitmapShape) Then
+        out.Add s
+        Exit Function
+    End If
+
+    Set b = ConvertShape(s, mode, res, bright)
+    If b Is Nothing Then
+        errCount = errCount + 1
+        out.Add s
+    Else
+        okCount = okCount + 1
+        out.Add b
+    End If
+    Exit Function
+
+Fail:
+    errCount = errCount + 1
+    On Error Resume Next
+    out.Add s
+End Function
+
 ' Bitta obyektni bitmapga aylantirish.
 ' Yorqinlik "Brighten" linzasi orqali beriladi: +100 ochroq, -100 to'qroq.
-Private Function ConvertShape(s As Shape, mode As cdrImageType, res As Long, bright As Long) As Boolean
+Private Function ConvertShape(s As Shape, mode As cdrImageType, res As Long, bright As Long) As Shape
     Dim target As Shape, r As Shape, grp As ShapeRange
     Dim aa As cdrAntiAliasingType
     On Error GoTo Fail
@@ -332,12 +409,11 @@ Private Function ConvertShape(s As Shape, mode As cdrImageType, res As Long, bri
     End If
 
     If chkAA.Value Then aa = cdrNormalAntiAliasing Else aa = cdrNoAntiAliasing
-    target.ConvertToBitmapEx mode, False, CBool(chkTransp.Value), res, aa, True, False, 95
-    ConvertShape = True
+    Set ConvertShape = target.ConvertToBitmapEx(mode, False, CBool(chkTransp.Value), res, aa, True, False, 95)
     Exit Function
 
 Fail:
-    ConvertShape = False
+    Set ConvertShape = Nothing
 End Function
 
 Private Sub SetStatus(msg As String)

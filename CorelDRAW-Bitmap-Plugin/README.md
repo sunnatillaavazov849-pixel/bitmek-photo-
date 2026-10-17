@@ -13,7 +13,7 @@ Oyna rangi — to'q kulrang, yozuvlar — oq.
 | **Rang rejimi** | RGB · CMYK · Grayscale |
 | **Razreshenie (DPI)** | 72, 150, 200, 300, 600, 1200 yoki o'zingiz yozasiz (30–3000) |
 | **Yorqinlik** | −100 (to'qroq) … 0 … +100 (ochroq) |
-| **Qo'shimcha** | Faqat rasmlarni o'zgartirish · Anti-aliasing · Shaffof fon |
+| **Qo'shimcha** | Guruh va PowerClip ichidagilarni ham alohida · Faqat rasmlarni o'zgartirish · Anti-aliasing · Shaffof fon |
 
 Hammasi bitta **Undo** (Ctrl+Z) bilan qaytariladi.
 Yashirin yoki qulflangan qatlamlar va qulflangan obyektlarga tegmaydi.
@@ -41,6 +41,10 @@ Oynaga tugma yoki matn qo'yish shart emas — hammasini kod o'zi chizadi.
 `modBitmap.BitmapKonverter` ni sichqoncha bilan istalgan panelga sudrab qo'ying.
 
 ## Eslatma
+* **Guruh va PowerClip ichidagilarni ham alohida** (standart yoqilgan): guruh ichidagi har bir obyekt
+  (rasm, vektor, matn) alohida bitmap bo'ladi va yana guruhlanadi; PowerClip ichidagi har bir obyekt
+  alohida bitmap bo'lib, o'z joyida PowerClip ichiga qaytariladi. Ichma-ich guruh/PowerClip ham ishlanadi.
+  PowerClip ramkasining o'zi vektor bo'lib qoladi.
 * Yorqinlik "Brighten" linzasi yordamida beriladi va bitmapga "yopishib" qoladi.
 * "Har birini alohida" — har bir rasm o'z joyida alohida bitmap bo'lib qoladi.
 * "Hammasini bitta" — har bir listdagi barcha obyektlar bitta bitmap bo'ladi.
