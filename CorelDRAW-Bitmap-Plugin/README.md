@@ -1,51 +1,34 @@
-# Bitmap konverter — CorelDRAW plagini
+# Bitmap — CorelDRAW plagini
 
-CorelDRAW'dagi rasmlarni (yoki barcha obyektlarni) bir bosishda **bitmap** qiladi.
+Obyektlarni bir bosishda bitmapga aylantiradi.
 
-Oyna rangi — to'q kulrang, yozuvlar — oq.
+![Ko'rinish](korinish.png)
 
-## Imkoniyatlar
+## Sozlamalar
 
-| Bo'lim | Variantlar |
-|---|---|
-| **Qamrov** | Faqat tanlanganlar · Joriy list · Barcha listlar |
-| **Usul** | Har birini alohida bitmap · Listdagi hammasini bitta bitmap |
-| **Rang rejimi** | RGB · CMYK · Grayscale |
-| **Razreshenie (DPI)** | 72, 150, 200, 300, 600, 1200 yoki o'zingiz yozasiz (30–3000) |
-| **Yorqinlik** | −100 (to'qroq) … 0 … +100 (ochroq) |
-| **Qo'shimcha** | Guruhni butunligicha bitta rasm qilish · PowerClip ichidagilarni ham · Faqat rasmlarni o'zgartirish · Anti-aliasing · Shaffof fon |
+| Blok | Sozlama | Qiymatlar |
+|---|---|---|
+| 1 | Qamrov | Tanlangan · Sahifa · Hammasi |
+| 1 | Usul | Alohida · Bitta |
+| 2 | Rang | RGB · CMYK · Gray |
+| 2 | Ruxsat | 30–3000 dpi (− / + tayyor qiymatlar bo‘yicha) |
+| 2 | Yorqinlik | −100 … +100 % (− / + qadami 5) |
+| 3 | Guruh bitta rasm | Guruh butunligicha bitta bitmap bo‘ladi |
+| 3 | PowerClip ichi | PowerClip ichidagilar bitmap qilinadi, ramka vektor qoladi |
+| 3 | Faqat rasmlar | Faqat bitmap obyektlar o‘zgaradi |
+| 3 | Anti-aliasing | Silliq chetlar |
+| 3 | Shaffof fon | Bitmap foni shaffof |
 
-Hammasi bitta **Undo** (Ctrl+Z) bilan qaytariladi.
-Yashirin yoki qulflangan qatlamlar va qulflangan obyektlarga tegmaydi.
+Har bir sozlamaning izohi sichqoncha olib borilganda ko‘rinadi.
+Hammasi bitta **Ctrl+Z** bilan qaytariladi. Qulflangan va yashirin qatlamlarga tegmaydi.
 
-## O'rnatish (CorelDRAW X6 … 2024)
+## O‘rnatish
 
-1. CorelDRAW'da **Alt + F11** bosing — VBA muharriri ochiladi.
-2. Chap tomonda **GlobalMacros** (yoki `GlobalMacros (GlobalMacros.gms)`) ni tanlang.
-3. **File → Import File...** → `modBitmap.bas` faylini tanlang.
-4. **Insert → UserForm** — yangi bo'sh oyna paydo bo'ladi.
-   Pastdagi **Properties** oynasida `(Name)` ni **`frmBitmap`** deb o'zgartiring.
-   (Properties ko'rinmasa — **F4** bosing.)
-5. Shu oynani o'ng tugma bilan bosib **View Code** ni tanlang,
-   u yerdagi hamma narsani o'chirib, `frmBitmap_kod.txt` ichidagi butun kodni joylang.
-6. **Ctrl + S** bilan saqlang va VBA muharririni yoping.
+1. **Alt+F11** → **GlobalMacros** → **File → Import** → `modBitmap.bas`.
+2. **Insert → UserForm** → Properties’da `(Name)` = **`frmBitmap`**.
+3. Oynada o‘ng tugma → **View Code** → `frmBitmap_kod.txt` dagi hamma kodni joylang → **Ctrl+S**.
 
-Oynaga tugma yoki matn qo'yish shart emas — hammasini kod o'zi chizadi.
+Ishga tushirish: **Tools → Macros → Run Macro** → `BitmapKonverter`.
+Panelga tugma: **Tools → Customization → Commands → Macros**.
 
-## Ishga tushirish
-
-**Tools → Scripts (Macros) → Run Macro...** → `modBitmap.BitmapKonverter`.
-
-### Panelga tugma qo'yish
-**Tools → Customization → Commands** → ro'yxatdan **Macros** ni tanlang →
-`modBitmap.BitmapKonverter` ni sichqoncha bilan istalgan panelga sudrab qo'ying.
-
-## Eslatma
-* **Guruhni butunligicha bitta rasm qilish** (standart yoqilgan): guruh ichidagi hamma narsa
-  (rasm, vektor, matn, PowerClip) birlashib **bitta bitmap** bo'ladi. O'chirilsa — guruhdagi har bir
-  obyekt alohida bitmap bo'lib, yana guruhlanadi.
-* **PowerClip ichidagilarni ham** (standart yoqilgan): PowerClip ichidagi obyektlar bitmap qilinib,
-  o'z joyiga qaytariladi (ichidagi guruh ham bitta rasm bo'ladi). PowerClip ramkasi vektor bo'lib qoladi.
-* Yorqinlik "Brighten" linzasi yordamida beriladi va bitmapga "yopishib" qoladi.
-* "Har birini alohida" — har bir rasm o'z joyida alohida bitmap bo'lib qoladi.
-* "Hammasini bitta" — har bir listdagi barcha obyektlar bitta bitmap bo'ladi.
+Yumaloq bloklar `%TEMP%` papkasidagi kichik `bmpk_*.bmp` rasmlar orqali chiziladi.

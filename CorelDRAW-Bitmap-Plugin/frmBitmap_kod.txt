@@ -2,257 +2,567 @@ Option Explicit
 
 ' =====================================================================
 '  BITMAP KONVERTER - oyna kodi (UserForm: frmBitmap)
-'  Barcha tugmalar va maydonlar shu kod orqali avtomatik yaratiladi,
-'  shuning uchun bo'sh UserForm yaratib, shu kodni joylash kifoya.
+'  Interfeys to'liq kod orqali chiziladi: bo'sh UserForm yetarli.
+'  Yumaloq bloklar va tugmalar vaqtinchalik BMP rasmlar orqali
+'  chiziladi (%TEMP% papkasida keshlanadi).
 ' =====================================================================
 
-' ----- Ranglar: to'q kulrang fon, oq matn -----
-Private Const CLR_BG As Long = &H2D2D2D
-Private Const CLR_PANEL As Long = &H383838
-Private Const CLR_INPUT As Long = &H1E1E1E
-Private Const CLR_BTN As Long = &H555555
-Private Const CLR_RUN As Long = &H6E6E6E
-Private Const CLR_TEXT As Long = &HFFFFFF
-Private Const CLR_MUTED As Long = &HC0C0C0
+#If VBA7 Then
+Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hWnd As LongPtr) As LongPtr
+Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hWnd As LongPtr, ByVal hDC As LongPtr) As Long
+Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hDC As LongPtr, ByVal nIndex As Long) As Long
+#Else
+Private Declare Function GetDC Lib "user32" (ByVal hWnd As Long) As Long
+Private Declare Function ReleaseDC Lib "user32" (ByVal hWnd As Long, ByVal hDC As Long) As Long
+Private Declare Function GetDeviceCaps Lib "gdi32" (ByVal hDC As Long, ByVal nIndex As Long) As Long
+#End If
 
-Private WithEvents btnRun As MSForms.CommandButton
-Private WithEvents btnClose As MSForms.CommandButton
-Private WithEvents btnReset As MSForms.CommandButton
-Private WithEvents scrBright As MSForms.ScrollBar
-Private WithEvents txtBright As MSForms.TextBox
+' ----- Dizayn tizimi: ranglar (&HBBGGRR) -----
+Private Const C_BG As Long = &HF4F2F2       ' asosiy fon - och kulrang
+Private Const C_CARD As Long = &HFFFFFF     ' bloklar - oq
+Private Const C_LINE As Long = &HE9E6E6     ' juda yengil chegara
+Private Const C_FIELD As Long = &HF1EEEE    ' maydon / segment foni
+Private Const C_TEXT As Long = &H1B1818     ' asosiy matn
+Private Const C_MUTED As Long = &H8C8484    ' ikkinchi darajali matn
+Private Const C_PRIMARY As Long = &H1B1818  ' asosiy tugma
+Private Const C_ON As Long = &H59C734       ' yoqilgan holat
+Private Const C_OFF As Long = &HDCD8D8       ' o'chirilgan holat
+Private Const C_ERR As Long = &H3B3BD9      ' xato
 
-Private optSel As MSForms.OptionButton
-Private optPage As MSForms.OptionButton
-Private optAll As MSForms.OptionButton
-Private optEach As MSForms.OptionButton
-Private optOne As MSForms.OptionButton
-Private optRGB As MSForms.OptionButton
-Private optCMYK As MSForms.OptionButton
-Private optGray As MSForms.OptionButton
-Private cboRes As MSForms.ComboBox
-Private chkGroupOne As MSForms.CheckBox
-Private chkDeep As MSForms.CheckBox
-Private chkOnlyBmp As MSForms.CheckBox
-Private chkAA As MSForms.CheckBox
-Private chkTransp As MSForms.CheckBox
+' ----- Dizayn tizimi: o'lchamlar (pt) -----
+Private Const FONT_NAME As String = "Segoe UI"
+Private Const FS_TITLE As Single = 13
+Private Const FS_BODY As Single = 9
+Private Const FS_VALUE As Single = 10
+Private Const FS_SMALL As Single = 8.5
+Private Const PAD As Single = 12         ' ichki bo'shliq
+Private Const GAP As Single = 10         ' bloklar orasi
+Private Const CTL_H As Single = 24       ' maydon / segment balandligi
+Private Const BTN_H As Single = 30       ' tugma balandligi
+Private Const STEP_W As Single = 112     ' sonli maydon kengligi
+Private Const UNIT_W As Single = 26      ' o'lchov birligi kengligi
+Private Const R_CARD As Single = 12      ' blok yumaloqligi
+Private Const R_CTL As Single = 7        ' maydon / tugma yumaloqligi
+Private Const PIC_VER As String = "v1"
+
+' ----- Kalitlar (mSw indekslari) -----
+Private Const SW_GROUP As Long = 1
+Private Const SW_DEEP As Long = 2
+Private Const SW_ONLYBMP As Long = 3
+Private Const SW_AA As Long = 4
+Private Const SW_TRANSP As Long = 5
+
+' ----- Holat -----
+Private mK As Double                ' 1 pt dagi piksel soni
+Private mScope As Long              ' 0 tanlangan, 1 sahifa, 2 hammasi
+Private mMethod As Long             ' 0 alohida, 1 bitta
+Private mColor As Long              ' 0 RGB, 1 CMYK, 2 Grayscale
+Private mSw(1 To 5) As Boolean
+Private mBusy As Boolean
+
+' ----- Elementlar -----
+Private WithEvents lScope0 As MSForms.Label
+Private WithEvents lScope1 As MSForms.Label
+Private WithEvents lScope2 As MSForms.Label
+Private WithEvents lMeth0 As MSForms.Label
+Private WithEvents lMeth1 As MSForms.Label
+Private WithEvents lCol0 As MSForms.Label
+Private WithEvents lCol1 As MSForms.Label
+Private WithEvents lCol2 As MSForms.Label
+Private WithEvents lResMinus As MSForms.Label
+Private WithEvents lResPlus As MSForms.Label
+Private WithEvents lBrMinus As MSForms.Label
+Private WithEvents lBrPlus As MSForms.Label
+Private WithEvents iSw1 As MSForms.Image
+Private WithEvents iSw2 As MSForms.Image
+Private WithEvents iSw3 As MSForms.Image
+Private WithEvents iSw4 As MSForms.Image
+Private WithEvents iSw5 As MSForms.Image
+Private WithEvents lSw1 As MSForms.Label
+Private WithEvents lSw2 As MSForms.Label
+Private WithEvents lSw3 As MSForms.Label
+Private WithEvents lSw4 As MSForms.Label
+Private WithEvents lSw5 As MSForms.Label
+Private WithEvents lApply As MSForms.Label
+Private WithEvents lClose As MSForms.Label
+
+Private txtRes As MSForms.TextBox
+Private txtBright As MSForms.TextBox
 Private lblStatus As MSForms.Label
-
-Private mUpdating As Boolean
+Private thScope As MSForms.Image
+Private thMeth As MSForms.Image
+Private thCol As MSForms.Image
+Private segScope(0 To 2) As Object
+Private segMeth(0 To 1) As Object
+Private segCol(0 To 2) As Object
+Private swImg(1 To 5) As Object
+Private picOn As Object
+Private picOff As Object
 
 ' =====================================================================
 '  OYNANI QURISH
 ' =====================================================================
 Private Sub UserForm_Initialize()
-    Dim fr As MSForms.Frame, lbl As MSForms.Label
+    Dim W As Single, cw As Single, x As Single, y As Single, h As Single
+    Dim rx As Single, i As Long, sw As Variant, lb As MSForms.Label
+    Dim tm As Object, tp As Object
 
-    mUpdating = True   ' qurish paytida hodisalar (Change) ishlamasin
+    mK = ScreenDpi() / 72
+    mScope = 1: mMethod = 0: mColor = 1
+    mSw(SW_GROUP) = True
+    mSw(SW_DEEP) = True
+    mSw(SW_ONLYBMP) = False
+    mSw(SW_AA) = True
+    mSw(SW_TRANSP) = True
 
-    Me.Caption = "Bitmap konverter"
-    Me.BackColor = CLR_BG
-    Me.ForeColor = CLR_TEXT
-    Me.Width = 292
-    Me.Height = 498
+    Me.Caption = "Bitmap"
+    Me.BackColor = C_BG
+    Me.Width = 300
+    W = Me.InsideWidth
+    cw = W - 2 * PAD
+    x = PAD + PAD                        ' blok ichidagi chap chiziq
+    rx = PAD + cw - PAD                  ' blok ichidagi o'ng chiziq
 
-    Set lbl = NewCtl(Me, "Forms.Label.1", "BITMAP KONVERTER", 10, 8, 270, 18, CLR_BG)
-    lbl.Font.Size = 12
-    lbl.Font.Bold = True
-    Set lbl = NewCtl(Me, "Forms.Label.1", "Rasmlarni bitmapga aylantirish", 10, 24, 270, 14, CLR_BG)
-    lbl.ForeColor = CLR_MUTED
+    y = PAD
+    AddLbl T("Bitmapga aylantirish"), PAD + 2, y, cw, 20, FS_TITLE, True
+    y = y + 30
 
-    ' ----- Qamrov -----
-    Set fr = NewFrame("Qamrov", 42, 70)
-    Set optSel = NewCtl(fr, "Forms.OptionButton.1", "Faqat tanlangan obyektlar", 8, 4, 250, 16, CLR_PANEL)
-    Set optPage = NewCtl(fr, "Forms.OptionButton.1", "Joriy list (hammasi)", 8, 22, 250, 16, CLR_PANEL)
-    Set optAll = NewCtl(fr, "Forms.OptionButton.1", "Barcha listlar (hammasi)", 8, 40, 250, 16, CLR_PANEL)
-    optPage.Value = True
+    ' ----- 1-blok: Qamrov va Usul -----
+    h = 114
+    AddCard PAD, y, cw, h
+    AddLbl "Qamrov", x, y + 10, 120, 14, FS_BODY, True, C_MUTED
+    BuildSeg "s3", x, y + 28, rx - x, Array("Tanlangan", "Sahifa", "Hammasi"), _
+             Array("Faqat tanlangan obyektlar", "Joriy sahifadagi barcha obyektlar", "Hujjatdagi barcha sahifalar"), _
+             segScope, thScope
+    Set lScope0 = segScope(0): Set lScope1 = segScope(1): Set lScope2 = segScope(2)
+    AddLbl "Usul", x, y + 60, 120, 14, FS_BODY, True, C_MUTED
+    BuildSeg "s2", x, y + 78, rx - x, Array("Alohida", "Bitta"), _
+             Array(T("Har bir obyekt alohida bitmap bo`ladi"), T("Sahifadagi barcha obyektlar bitta bitmap bo`ladi")), _
+             segMeth, thMeth
+    Set lMeth0 = segMeth(0): Set lMeth1 = segMeth(1)
+    y = y + h + GAP
 
-    ' ----- Usul -----
-    Set fr = NewFrame("Usul", 118, 52)
-    Set optEach = NewCtl(fr, "Forms.OptionButton.1", "Har birini alohida bitmap qilish", 8, 4, 250, 16, CLR_PANEL)
-    Set optOne = NewCtl(fr, "Forms.OptionButton.1", "Listdagi hammasini bitta bitmap qilish", 8, 22, 250, 16, CLR_PANEL)
-    optEach.Value = True
+    ' ----- 2-blok: Rang, Ruxsat, Yorqinlik -----
+    h = 132
+    AddCard PAD, y, cw, h
+    AddLbl "Rang", x, y + 10, 120, 14, FS_BODY, True, C_MUTED
+    BuildSeg "s3", x, y + 28, rx - x, Array("RGB", "CMYK", "Gray"), _
+             Array("RGB", "CMYK", "Grayscale"), segCol, thCol
+    Set lCol0 = segCol(0): Set lCol1 = segCol(1): Set lCol2 = segCol(2)
 
-    ' ----- Rang rejimi -----
-    Set fr = NewFrame("Rang rejimi", 176, 36)
-    Set optRGB = NewCtl(fr, "Forms.OptionButton.1", "RGB", 8, 4, 60, 16, CLR_PANEL)
-    Set optCMYK = NewCtl(fr, "Forms.OptionButton.1", "CMYK", 80, 4, 60, 16, CLR_PANEL)
-    Set optGray = NewCtl(fr, "Forms.OptionButton.1", "Grayscale", 155, 4, 90, 16, CLR_PANEL)
-    optCMYK.Value = True
+    AddLbl "Ruxsat", x, CenterTop(y + 62, CTL_H, FS_BODY), 100, 16, FS_BODY, , , , "Bitmap ruxsati: 30-3000 dpi"
+    BuildStepper rx - UNIT_W - 4 - STEP_W, y + 62, "300", txtRes, tm, tp
+    Set lResMinus = tm: Set lResPlus = tp
+    AddLbl "dpi", rx - UNIT_W, CenterTop(y + 62, CTL_H, FS_BODY), UNIT_W, 16, FS_BODY, , C_MUTED, fmTextAlignRight
 
-    ' ----- Razreshenie -----
-    NewCtl Me, "Forms.Label.1", "Razreshenie (DPI):", 12, 224, 120, 16, CLR_BG
-    Set cboRes = NewCtl(Me, "Forms.ComboBox.1", "", 150, 221, 130, 18, CLR_INPUT)
-    cboRes.AddItem "72"
-    cboRes.AddItem "150"
-    cboRes.AddItem "200"
-    cboRes.AddItem "300"
-    cboRes.AddItem "600"
-    cboRes.AddItem "1200"
-    cboRes.Text = "300"
+    AddLbl "Yorqinlik", x, CenterTop(y + 96, CTL_H, FS_BODY), 100, 16, FS_BODY, , , , _
+           T("-100 to`qroq, 0 o`zgarishsiz, +100 ochroq")
+    BuildStepper rx - UNIT_W - 4 - STEP_W, y + 96, "0", txtBright, tm, tp
+    Set lBrMinus = tm: Set lBrPlus = tp
+    AddLbl "%", rx - UNIT_W, CenterTop(y + 96, CTL_H, FS_BODY), UNIT_W, 16, FS_BODY, , C_MUTED, fmTextAlignRight
+    y = y + h + GAP
 
-    ' ----- Yorqinlik -----
-    Set fr = NewFrame("Yorqinlik (ochroq / to'qroq)", 246, 56)
-    Set scrBright = NewCtl(fr, "Forms.ScrollBar.1", "", 8, 6, 182, 16, CLR_PANEL)
-    scrBright.Orientation = fmOrientationHorizontal
-    scrBright.Min = -100
-    scrBright.Max = 100
-    scrBright.SmallChange = 1
-    scrBright.LargeChange = 10
-    scrBright.Value = 0
-    Set txtBright = NewCtl(fr, "Forms.TextBox.1", "", 196, 5, 38, 18, CLR_INPUT)
-    txtBright.Text = "0"
-    txtBright.TextAlign = fmTextAlignCenter
-    Set btnReset = NewCtl(fr, "Forms.CommandButton.1", "0", 238, 5, 22, 18, CLR_BTN)
-    Set lbl = NewCtl(fr, "Forms.Label.1", "< To'qroq", 8, 24, 80, 12, CLR_PANEL)
-    lbl.ForeColor = CLR_MUTED
-    Set lbl = NewCtl(fr, "Forms.Label.1", "Ochroq >", 110, 24, 80, 12, CLR_PANEL)
-    lbl.ForeColor = CLR_MUTED
-    lbl.TextAlign = fmTextAlignRight
-
-    ' ----- Qo'shimcha -----
-    Set chkGroupOne = NewCtl(Me, "Forms.CheckBox.1", "Guruhni butunligicha bitta rasm qilish", 12, 310, 268, 16, CLR_BG)
-    Set chkDeep = NewCtl(Me, "Forms.CheckBox.1", "PowerClip ichidagilarni ham bitmap qilish", 12, 328, 268, 16, CLR_BG)
-    Set chkOnlyBmp = NewCtl(Me, "Forms.CheckBox.1", "Faqat rasmlar (bitmap) ni o'zgartirish", 12, 346, 268, 16, CLR_BG)
-    Set chkAA = NewCtl(Me, "Forms.CheckBox.1", "Anti-aliasing (silliq chetlar)", 12, 364, 268, 16, CLR_BG)
-    Set chkTransp = NewCtl(Me, "Forms.CheckBox.1", "Shaffof fon", 12, 382, 268, 16, CLR_BG)
-    chkGroupOne.Value = True
-    chkDeep.Value = True
-    chkOnlyBmp.Value = False
-    chkAA.Value = True
-    chkTransp.Value = True
+    ' ----- 3-blok: Parametrlar (kalitlar) -----
+    Set picOn = RenderPic("swOn", 30, 18, C_CARD, Array(0, 0, 30, 18, 9, C_ON), Array(14, 2, 14, 14, 7, C_CARD))
+    Set picOff = RenderPic("swOff", 30, 18, C_CARD, Array(0, 0, 30, 18, 9, C_OFF), Array(2, 2, 14, 14, 7, C_CARD))
+    sw = Array( _
+        Array("Guruh bitta rasm", T("Guruh butunligicha bitta bitmap bo`ladi. O`chirilsa, har bir bo`lagi alohida.")), _
+        Array("PowerClip ichi", T("PowerClip ichidagilar bitmap qilinadi, ramka vektor qoladi")), _
+        Array("Faqat rasmlar", T("Faqat bitmap obyektlar o`zgaradi")), _
+        Array("Anti-aliasing", "Silliq chetlar"), _
+        Array("Shaffof fon", "Bitmap foni shaffof bo" & ChrW(&H2018) & "ladi"))
+    h = 8 + 5 * 26 + 6
+    AddCard PAD, y, cw, h
+    For i = 1 To 5
+        Set lb = AddLbl(CStr(sw(i - 1)(0)), x, CenterTop(y + 8 + (i - 1) * 26, 26, FS_BODY), 180, 16, FS_BODY, , , , CStr(sw(i - 1)(1)))
+        Set swImg(i) = AddImg(rx - 30, y + 8 + (i - 1) * 26 + 4, 30, 18, Nothing)
+        swImg(i).ControlTipText = CStr(sw(i - 1)(1))
+        RefreshSwitch i
+        Select Case i
+            Case 1: Set lSw1 = lb: Set iSw1 = swImg(i)
+            Case 2: Set lSw2 = lb: Set iSw2 = swImg(i)
+            Case 3: Set lSw3 = lb: Set iSw3 = swImg(i)
+            Case 4: Set lSw4 = lb: Set iSw4 = swImg(i)
+            Case 5: Set lSw5 = lb: Set iSw5 = swImg(i)
+        End Select
+    Next i
+    y = y + h + 8
 
     ' ----- Holat -----
-    Set lblStatus = NewCtl(Me, "Forms.Label.1", "Tayyor.", 12, 404, 268, 26, CLR_BG)
-    lblStatus.ForeColor = CLR_MUTED
-    lblStatus.WordWrap = True
+    Set lblStatus = AddLbl("Tayyor", PAD + 2, y, cw - 4, 14, FS_SMALL, , C_MUTED)
+    y = y + 20
 
     ' ----- Tugmalar -----
-    Set btnRun = NewCtl(Me, "Forms.CommandButton.1", "BAJARISH", 10, 434, 170, 28, CLR_RUN)
-    btnRun.Font.Bold = True
-    Set btnClose = NewCtl(Me, "Forms.CommandButton.1", "Yopish", 188, 434, 92, 28, CLR_BTN)
+    AddImg PAD, y, 84, BTN_H, RenderPic("btnS", 84, BTN_H, C_BG, _
+           Array(0, 0, 84, BTN_H, R_CTL, C_LINE), Array(Px1, Px1, 84 - 2 * Px1, BTN_H - 2 * Px1, R_CTL - Px1, C_CARD))
+    Set lClose = AddLbl("Yopish", PAD, CenterTop(y, BTN_H, FS_BODY), 84, 16, FS_BODY, True, , fmTextAlignCenter)
+    AddImg PAD + 92, y, cw - 92, BTN_H, RenderPic("btnP", cw - 92, BTN_H, C_BG, _
+           Array(0, 0, cw - 92, BTN_H, R_CTL, C_PRIMARY))
+    Set lApply = AddLbl(T("Qo`llash"), PAD + 92, CenterTop(y, BTN_H, FS_BODY), cw - 92, 16, FS_BODY, True, C_CARD, fmTextAlignCenter)
+    y = y + BTN_H + PAD
 
-    mUpdating = False
+    Me.Height = Me.Height - Me.InsideHeight + y
+
+    SelectSeg segScope, thScope, mScope
+    SelectSeg segMeth, thMeth, mMethod
+    SelectSeg segCol, thCol, mColor
 End Sub
 
-Private Function NewFrame(cap As String, t As Single, h As Single) As MSForms.Frame
-    Dim fr As MSForms.Frame
-    Set fr = NewCtl(Me, "Forms.Frame.1", cap, 8, t, 272, h, CLR_PANEL)
-    fr.SpecialEffect = fmSpecialEffectFlat
-    fr.BorderStyle = fmBorderStyleSingle
-    fr.BorderColor = CLR_BTN
-    Set NewFrame = fr
+' ----- Komponentlar -----
+Private Sub AddCard(l As Single, t As Single, w As Single, h As Single)
+    AddImg l, t, w, h, RenderPic("card", w, h, C_BG, _
+           Array(0, 0, w, h, R_CARD, C_LINE), Array(Px1, Px1, w - 2 * Px1, h - 2 * Px1, R_CARD - Px1, C_CARD))
+End Sub
+
+' Segmentli tanlov: kulrang fon + oq "surgich" + yozuvlar
+Private Sub BuildSeg(key As String, l As Single, t As Single, w As Single, caps As Variant, tips As Variant, _
+                     lbls() As Object, thumb As MSForms.Image)
+    Dim n As Long, i As Long, segW As Single, th As Single
+    n = UBound(caps) + 1
+    segW = (w - 4) / n
+    th = CTL_H - 4
+    AddImg l, t, w, CTL_H, RenderPic("seg", w, CTL_H, C_CARD, Array(0, 0, w, CTL_H, R_CTL, C_FIELD))
+    Set thumb = AddImg(l + 2, t + 2, segW, th, RenderPic("thumb", segW, th, C_FIELD, _
+                Array(0, 0, segW, th, R_CTL - 2, C_LINE), Array(Px1, Px1, segW - 2 * Px1, th - 2 * Px1, R_CTL - 2 - Px1, C_CARD)))
+    For i = 0 To n - 1
+        Set lbls(i) = AddLbl(CStr(caps(i)), l + 2 + i * segW, CenterTop(t, CTL_H, FS_BODY), segW, 16, FS_BODY, _
+                             False, C_MUTED, fmTextAlignCenter, CStr(tips(i)))
+    Next i
+End Sub
+
+Private Sub SelectSeg(lbls() As Object, thumb As MSForms.Image, idx As Long)
+    Dim i As Long
+    thumb.Left = lbls(idx).Left
+    For i = LBound(lbls) To UBound(lbls)
+        lbls(i).Font.Bold = (i = idx)
+        lbls(i).ForeColor = IIf(i = idx, C_TEXT, C_MUTED)
+    Next i
+End Sub
+
+' Sonli maydon: [ - ] qiymat [ + ]
+Private Sub BuildStepper(l As Single, t As Single, v As String, txt As MSForms.TextBox, _
+                         lMinus As Object, lPlus As Object)
+    AddImg l, t, STEP_W, CTL_H, RenderPic("step", STEP_W, CTL_H, C_CARD, Array(0, 0, STEP_W, CTL_H, R_CTL, C_FIELD))
+    Set lMinus = AddLbl(ChrW(&H2212), l, CenterTop(t, CTL_H, 12), 26, 20, 12, , C_TEXT, fmTextAlignCenter)
+    Set lPlus = AddLbl("+", l + STEP_W - 26, CenterTop(t, CTL_H, 12), 26, 20, 12, , C_TEXT, fmTextAlignCenter)
+    Set txt = Me.Controls.Add("Forms.TextBox.1")
+    txt.Left = l + 26
+    txt.Top = t + 3
+    txt.Width = STEP_W - 52
+    txt.Height = CTL_H - 6
+    txt.BorderStyle = fmBorderStyleNone
+    txt.SpecialEffect = fmSpecialEffectFlat
+    txt.BackColor = C_FIELD
+    txt.ForeColor = C_TEXT
+    txt.Font.Name = FONT_NAME
+    txt.Font.Size = FS_VALUE
+    txt.Font.Bold = True
+    txt.TextAlign = fmTextAlignCenter
+    txt.Text = v
+End Sub
+
+Private Function AddLbl(cap As String, l As Single, t As Single, w As Single, h As Single, _
+                        Optional size As Single = FS_BODY, Optional bold As Boolean = False, _
+                        Optional color As Long = C_TEXT, Optional align As Long = 1, _
+                        Optional tip As String = "") As MSForms.Label
+    Dim lb As MSForms.Label
+    Set lb = Me.Controls.Add("Forms.Label.1")
+    lb.Left = l: lb.Top = t: lb.Width = w: lb.Height = h
+    lb.Caption = cap
+    lb.BackStyle = fmBackStyleTransparent
+    lb.WordWrap = False
+    lb.Font.Name = FONT_NAME
+    lb.Font.Size = size
+    lb.Font.Bold = bold
+    lb.ForeColor = color
+    lb.TextAlign = align
+    lb.ControlTipText = tip
+    Set AddLbl = lb
 End Function
 
-Private Function NewCtl(parent As Object, progId As String, cap As String, _
-                        l As Single, t As Single, w As Single, h As Single, _
-                        bg As Long) As Object
-    Dim c As Object
-    Set c = parent.Controls.Add(progId)
-    c.Left = l
-    c.Top = t
-    c.Width = w
-    c.Height = h
-    On Error Resume Next   ' hamma elementda ham barcha xossalar yo'q
-    If cap <> "" Then c.Caption = cap
-    c.Font.Name = "Segoe UI"
-    c.Font.Size = 9
-    c.ForeColor = CLR_TEXT
-    c.BackColor = bg
-    c.BackStyle = fmBackStyleOpaque
-    On Error GoTo 0
-    Set NewCtl = c
+Private Function AddImg(l As Single, t As Single, w As Single, h As Single, pic As Object) As MSForms.Image
+    Dim im As MSForms.Image
+    Set im = Me.Controls.Add("Forms.Image.1")
+    im.Left = l: im.Top = t: im.Width = w: im.Height = h
+    im.BorderStyle = fmBorderStyleNone
+    im.SpecialEffect = fmSpecialEffectFlat
+    im.BackStyle = fmBackStyleTransparent
+    im.PictureSizeMode = fmPictureSizeModeStretch
+    If Not pic Is Nothing Then Set im.Picture = pic
+    Set AddImg = im
+End Function
+
+Private Function CenterTop(t As Single, h As Single, size As Single) As Single
+    CenterTop = t + (h - size * 1.36) / 2 - 1
+End Function
+
+Private Function T(ByVal s As String) As String
+    T = Replace(s, "`", ChrW(&H2018))
 End Function
 
 ' =====================================================================
-'  YORQINLIK BOSHQARUVI
+'  YUMALOQ SHAKLLARNI CHIZISH (BMP, silliq chetlar bilan)
 ' =====================================================================
-Private Sub scrBright_Change()
-    SyncBrightText
+Private Function ScreenDpi() As Double
+#If VBA7 Then
+    Dim dc As LongPtr
+#Else
+    Dim dc As Long
+#End If
+    On Error GoTo Fallback
+    dc = GetDC(0)
+    ScreenDpi = GetDeviceCaps(dc, 88)   ' LOGPIXELSX
+    ReleaseDC 0, dc
+    If ScreenDpi < 72 Then ScreenDpi = 96
+    Exit Function
+Fallback:
+    ScreenDpi = 96
+End Function
+
+' 1 piksel (pt da)
+Private Function Px1() As Single
+    Px1 = 1 / mK
+End Function
+
+' Har bir shakl: Array(x, y, w, h, radius, rang) - pt da.
+Private Function RenderPic(key As String, w As Single, h As Single, bg As Long, ParamArray shapes() As Variant) As Object
+    Dim path As String, wp As Long, hp As Long, rowSize As Long, n As Long
+    Dim buf() As Byte, x As Long, y As Long, i As Long, off As Long, f As Integer
+    Dim cx() As Double, cy() As Double, hx() As Double, hy() As Double, rr() As Double
+    Dim sr() As Double, sg() As Double, sb() As Double
+    Dim cr As Double, cg As Double, cb As Double, a As Double
+    Dim qx As Double, qy As Double, ox As Double, oy As Double, m As Double, d As Double
+    Dim s As Variant, r As Double, col As Long
+
+    On Error GoTo Fail
+    wp = Int(w * mK + 0.5): If wp < 1 Then wp = 1
+    hp = Int(h * mK + 0.5): If hp < 1 Then hp = 1
+    path = Environ$("TEMP") & "\bmpk_" & PIC_VER & "_" & key & "_" & wp & "x" & hp & ".bmp"
+
+    If Len(Dir$(path)) = 0 Then
+        n = UBound(shapes)
+        If n >= 0 Then
+            ReDim cx(n): ReDim cy(n): ReDim hx(n): ReDim hy(n): ReDim rr(n)
+            ReDim sr(n): ReDim sg(n): ReDim sb(n)
+        End If
+        For i = 0 To n
+            s = shapes(i)
+            r = s(4) * mK
+            If r > s(2) * mK / 2 Then r = s(2) * mK / 2
+            If r > s(3) * mK / 2 Then r = s(3) * mK / 2
+            If r < 0 Then r = 0
+            cx(i) = (s(0) + s(2) / 2) * mK
+            cy(i) = (s(1) + s(3) / 2) * mK
+            hx(i) = s(2) * mK / 2 - r
+            hy(i) = s(3) * mK / 2 - r
+            rr(i) = r
+            col = s(5)
+            sr(i) = col And &HFF: sg(i) = (col \ &H100) And &HFF: sb(i) = (col \ &H10000) And &HFF
+        Next i
+
+        rowSize = ((wp * 3 + 3) \ 4) * 4
+        ReDim buf(0 To 53 + rowSize * hp)
+        buf(0) = 66: buf(1) = 77                 ' "BM"
+        PutLong buf, 2, 54 + rowSize * hp
+        PutLong buf, 10, 54
+        PutLong buf, 14, 40
+        PutLong buf, 18, wp
+        PutLong buf, 22, hp
+        buf(26) = 1: buf(28) = 24
+        PutLong buf, 34, rowSize * hp
+        PutLong buf, 38, 2835
+        PutLong buf, 42, 2835
+
+        For y = 0 To hp - 1
+            For x = 0 To wp - 1
+                cr = bg And &HFF: cg = (bg \ &H100) And &HFF: cb = (bg \ &H10000) And &HFF
+                For i = 0 To n
+                    qx = Abs(x + 0.5 - cx(i)) - hx(i)
+                    qy = Abs(y + 0.5 - cy(i)) - hy(i)
+                    If qx > 0 Then ox = qx Else ox = 0
+                    If qy > 0 Then oy = qy Else oy = 0
+                    If qx > qy Then m = qx Else m = qy
+                    If m > 0 Then m = 0
+                    d = Sqr(ox * ox + oy * oy) + m - rr(i)
+                    a = 0.5 - d
+                    If a > 0 Then
+                        If a > 1 Then a = 1
+                        cr = cr + (sr(i) - cr) * a
+                        cg = cg + (sg(i) - cg) * a
+                        cb = cb + (sb(i) - cb) * a
+                    End If
+                Next i
+                off = 54 + (hp - 1 - y) * rowSize + x * 3
+                buf(off) = CByte(cb): buf(off + 1) = CByte(cg): buf(off + 2) = CByte(cr)
+            Next x
+        Next y
+
+        f = FreeFile
+        Open path For Binary Access Write As #f
+        Put #f, 1, buf
+        Close #f
+    End If
+
+    Set RenderPic = LoadPicture(path)
+    Exit Function
+Fail:
+    Set RenderPic = Nothing     ' rasm chizilmasa ham oyna ishlayveradi
+End Function
+
+Private Sub PutLong(buf() As Byte, pos As Long, ByVal v As Long)
+    buf(pos) = v And &HFF
+    buf(pos + 1) = (v \ &H100) And &HFF
+    buf(pos + 2) = (v \ &H10000) And &HFF
+    buf(pos + 3) = (v \ &H1000000) And &HFF
 End Sub
 
-Private Sub scrBright_Scroll()
-    SyncBrightText
+' =====================================================================
+'  HODISALAR
+' =====================================================================
+Private Sub lScope0_Click(): SetScope 0: End Sub
+Private Sub lScope1_Click(): SetScope 1: End Sub
+Private Sub lScope2_Click(): SetScope 2: End Sub
+Private Sub lMeth0_Click(): SetMethod 0: End Sub
+Private Sub lMeth1_Click(): SetMethod 1: End Sub
+Private Sub lCol0_Click(): SetColor 0: End Sub
+Private Sub lCol1_Click(): SetColor 1: End Sub
+Private Sub lCol2_Click(): SetColor 2: End Sub
+
+Private Sub SetScope(i As Long): mScope = i: SelectSeg segScope, thScope, i: End Sub
+Private Sub SetMethod(i As Long): mMethod = i: SelectSeg segMeth, thMeth, i: End Sub
+Private Sub SetColor(i As Long): mColor = i: SelectSeg segCol, thCol, i: End Sub
+
+Private Sub lResMinus_Click(): StepRes -1: End Sub
+Private Sub lResPlus_Click(): StepRes 1: End Sub
+Private Sub lBrMinus_Click(): StepBright -1: End Sub
+Private Sub lBrPlus_Click(): StepBright 1: End Sub
+Private Sub lResMinus_DblClick(ByVal Cancel As MSForms.ReturnBoolean): StepRes -1: End Sub
+Private Sub lResPlus_DblClick(ByVal Cancel As MSForms.ReturnBoolean): StepRes 1: End Sub
+Private Sub lBrMinus_DblClick(ByVal Cancel As MSForms.ReturnBoolean): StepBright -1: End Sub
+Private Sub lBrPlus_DblClick(ByVal Cancel As MSForms.ReturnBoolean): StepBright 1: End Sub
+
+' Ruxsat: tayyor qiymatlar bo'yicha qadam
+Private Sub StepRes(dir As Long)
+    Dim p As Variant, v As Long, i As Long
+    p = Array(72, 150, 200, 300, 600, 1200, 2400)
+    v = CLng(Val(txtRes.Text))
+    If dir > 0 Then
+        For i = 0 To UBound(p)
+            If p(i) > v Then txtRes.Text = CStr(p(i)): Exit Sub
+        Next i
+    Else
+        For i = UBound(p) To 0 Step -1
+            If p(i) < v Then txtRes.Text = CStr(p(i)): Exit Sub
+        Next i
+    End If
 End Sub
 
-Private Sub SyncBrightText()
-    If mUpdating Or txtBright Is Nothing Then Exit Sub
-    mUpdating = True
-    txtBright.Text = CStr(scrBright.Value)
-    mUpdating = False
-End Sub
-
-Private Sub txtBright_Change()
+Private Sub StepBright(dir As Long)
     Dim v As Long
-    If mUpdating Or scrBright Is Nothing Then Exit Sub
-    If Not IsNumeric(txtBright.Text) Then Exit Sub
-    v = CLng(Val(txtBright.Text))
+    v = CLng(Val(txtBright.Text)) + 5 * dir
     If v < -100 Then v = -100
     If v > 100 Then v = 100
-    mUpdating = True
-    scrBright.Value = v
-    mUpdating = False
+    txtBright.Text = CStr(v)
 End Sub
 
-Private Sub btnReset_Click()
-    scrBright.Value = 0
+Private Sub iSw1_Click(): ToggleSwitch 1: End Sub
+Private Sub iSw2_Click(): ToggleSwitch 2: End Sub
+Private Sub iSw3_Click(): ToggleSwitch 3: End Sub
+Private Sub iSw4_Click(): ToggleSwitch 4: End Sub
+Private Sub iSw5_Click(): ToggleSwitch 5: End Sub
+Private Sub lSw1_Click(): ToggleSwitch 1: End Sub
+Private Sub lSw2_Click(): ToggleSwitch 2: End Sub
+Private Sub lSw3_Click(): ToggleSwitch 3: End Sub
+Private Sub lSw4_Click(): ToggleSwitch 4: End Sub
+Private Sub lSw5_Click(): ToggleSwitch 5: End Sub
+
+Private Sub ToggleSwitch(i As Long)
+    mSw(i) = Not mSw(i)
+    RefreshSwitch i
 End Sub
 
-Private Sub btnClose_Click()
-    Unload Me
+Private Sub RefreshSwitch(i As Long)
+    If picOn Is Nothing Or picOff Is Nothing Then
+        ' rasm chizilmagan bo'lsa - oddiy rangli to'rtburchak
+        swImg(i).BackStyle = fmBackStyleOpaque
+        swImg(i).BackColor = IIf(mSw(i), C_ON, C_OFF)
+    ElseIf mSw(i) Then
+        Set swImg(i).Picture = picOn
+    Else
+        Set swImg(i).Picture = picOff
+    End If
+End Sub
+
+Private Sub lClose_Click()
+    If Not mBusy Then Unload Me
+End Sub
+
+Private Sub lApply_Click()
+    If Not mBusy Then RunConvert
+End Sub
+
+Private Sub SetStatus(msg As String, Optional isErr As Boolean = False)
+    lblStatus.Caption = msg
+    lblStatus.ForeColor = IIf(isErr, C_ERR, C_MUTED)
+    DoEvents
 End Sub
 
 ' =====================================================================
 '  ASOSIY ISH
 ' =====================================================================
-Private Sub btnRun_Click()
+Private Sub RunConvert()
     Dim res As Long, mode As cdrImageType, bright As Long
     Dim pg As Page, sr As ShapeRange
     Dim okCount As Long, errCount As Long
 
-    If ActiveDocument Is Nothing Then
-        MsgBox "Ochiq hujjat yo'q.", vbExclamation, Me.Caption
+    If Documents.Count = 0 Then
+        SetStatus "Hujjat ochilmagan", True
         Exit Sub
     End If
 
-    If Not IsNumeric(cboRes.Text) Then
-        MsgBox "Razreshenie (DPI) raqam bo'lishi kerak.", vbExclamation, Me.Caption
-        Exit Sub
-    End If
-    res = CLng(Val(cboRes.Text))
-    If res < 30 Or res > 3000 Then
-        MsgBox "Razreshenie 30 dan 3000 gacha bo'lishi kerak.", vbExclamation, Me.Caption
+    res = CLng(Val(txtRes.Text))
+    If Not IsNumeric(txtRes.Text) Or res < 30 Or res > 3000 Then
+        SetStatus "Ruxsat: 30-3000 dpi", True
         Exit Sub
     End If
 
-    If optRGB.Value Then
-        mode = cdrRGBColorImage
-    ElseIf optCMYK.Value Then
-        mode = cdrCMYKColorImage
-    Else
-        mode = cdrGrayscaleImage
+    If Not IsNumeric(txtBright.Text) Then
+        SetStatus "Yorqinlik: -100 ... 100", True
+        Exit Sub
     End If
-    bright = scrBright.Value
-
-    If optSel.Value And ActiveSelectionRange.Count = 0 Then
-        MsgBox "Hech narsa tanlanmagan.", vbExclamation, Me.Caption
+    bright = CLng(Val(txtBright.Text))
+    If bright < -100 Or bright > 100 Then
+        SetStatus "Yorqinlik: -100 ... 100", True
         Exit Sub
     End If
 
-    btnRun.Enabled = False
-    ActiveDocument.BeginCommandGroup "Bitmap konverter"
+    Select Case mColor
+        Case 0: mode = cdrRGBColorImage
+        Case 1: mode = cdrCMYKColorImage
+        Case Else: mode = cdrGrayscaleImage
+    End Select
+
+    If mScope = 0 And ActiveSelectionRange.Count = 0 Then
+        SetStatus "Hech narsa tanlanmagan", True
+        Exit Sub
+    End If
+
+    mBusy = True
+    lApply.Caption = "Ishlanmoqda" & ChrW(&H2026)
+    ActiveDocument.BeginCommandGroup "Bitmap"
     Optimization = True
     On Error GoTo Finish
 
-    If optSel.Value Then
+    If mScope = 0 Then
         Set sr = FilterRange(ActiveSelectionRange)
         ProcessRange sr, mode, res, bright, okCount, errCount
-    ElseIf optPage.Value Then
+    ElseIf mScope = 1 Then
         Set sr = CollectPage(ActivePage)
         ProcessRange sr, mode, res, bright, okCount, errCount
     Else
         For Each pg In ActiveDocument.Pages
             pg.Activate
-            SetStatus "List " & pg.Index & " / " & ActiveDocument.Pages.Count & " ..."
+            SetStatus "Sahifa " & pg.Index & " / " & ActiveDocument.Pages.Count
             Set sr = CollectPage(pg)
             ProcessRange sr, mode, res, bright, okCount, errCount
         Next pg
@@ -265,16 +575,17 @@ Finish:
     ActiveDocument.EndCommandGroup
     ActiveWindow.Refresh
     Application.Refresh
-    btnRun.Enabled = True
+    mBusy = False
+    lApply.Caption = T("Qo`llash")
 
-    SetStatus "Tayyor: " & okCount & " ta bitmap qilindi" & _
-              IIf(errCount > 0, ", " & errCount & " ta xato.", ".")
-    MsgBox okCount & " ta obyekt bitmapga aylantirildi." & _
-           IIf(errCount > 0, vbCrLf & errCount & " ta obyektda xato bo'ldi.", ""), _
-           vbInformation, Me.Caption
+    If errCount > 0 Then
+        SetStatus "Bajarildi: " & okCount & "  " & ChrW(&HB7) & "  Xato: " & errCount, True
+        MsgBox "Xato: " & errCount & " ta obyekt o" & ChrW(&H2018) & "zgarmadi.", vbExclamation, Me.Caption
+    Else
+        SetStatus "Bajarildi: " & okCount
+    End If
 End Sub
 
-' Listdagi barcha mos obyektlarni yig'ish (yashirin/qulflangan qatlamlar o'tkazib yuboriladi)
 Private Function CollectPage(pg As Page) As ShapeRange
     Dim sr As ShapeRange, lyr As Layer, s As Shape
     Set sr = CreateShapeRange
@@ -308,7 +619,7 @@ Private Sub ProcessRange(sr As ShapeRange, mode As cdrImageType, res As Long, br
     Dim i As Long
     If sr.Count = 0 Then Exit Sub
 
-    If optOne.Value Then
+    If (mMethod = 1) Then
         If sr.Count > 1 Then
             If ConvertShape(sr.Group, mode, res, bright) Is Nothing Then errCount = errCount + 1 Else okCount = okCount + 1
         Else
@@ -338,7 +649,7 @@ Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bri
     Set ProcessShape = out
     On Error GoTo Fail
 
-    If chkDeep.Value Then
+    If mSw(SW_DEEP) Then
         ' ----- PowerClip ichidagilar -----
         On Error Resume Next
         Set pc = s.PowerClip
@@ -358,7 +669,7 @@ Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bri
     End If
 
     ' ----- Guruhni bo'laklab ishlash (bitta rasm qilish o'chirilgan bo'lsa) -----
-    If Not chkGroupOne.Value Then
+    If Not mSw(SW_GROUP) Then
         If s.Type = cdrGroupShape Then
             nm = s.Name
             Set kids = s.UngroupEx
@@ -380,7 +691,7 @@ Private Function ProcessShape(s As Shape, mode As cdrImageType, res As Long, bri
     ' ----- Oddiy obyekt (rasm, vektor, matn ...) -----
     ' (Guruh shu yerga kelsa - butunligicha bitta bitmap bo'ladi)
     If s.Locked Or s.Type = cdrGuidelineShape Or _
-       (chkOnlyBmp.Value And s.Type <> cdrBitmapShape And s.Type <> cdrGroupShape) Then
+       (mSw(SW_ONLYBMP) And s.Type <> cdrBitmapShape And s.Type <> cdrGroupShape) Then
         out.Add s
         Exit Function
     End If
@@ -420,15 +731,11 @@ Private Function ConvertShape(s As Shape, mode As cdrImageType, res As Long, bri
         Set target = grp.Group
     End If
 
-    If chkAA.Value Then aa = cdrNormalAntiAliasing Else aa = cdrNoAntiAliasing
-    Set ConvertShape = target.ConvertToBitmapEx(mode, False, CBool(chkTransp.Value), res, aa, True, False, 95)
+    If mSw(SW_AA) Then aa = cdrNormalAntiAliasing Else aa = cdrNoAntiAliasing
+    Set ConvertShape = target.ConvertToBitmapEx(mode, False, mSw(SW_TRANSP), res, aa, True, False, 95)
     Exit Function
 
 Fail:
     Set ConvertShape = Nothing
 End Function
 
-Private Sub SetStatus(msg As String)
-    lblStatus.Caption = msg
-    DoEvents
-End Sub
