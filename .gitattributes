@@ -1,2 +1,5 @@
-*.bas text eol=crlf
-*.txt text eol=crlf
+*.bas -text
+*.frm -text
+*.cls -text
+*.frx binary
+*.vba -text
